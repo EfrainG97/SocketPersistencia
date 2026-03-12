@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
+using Microsoft.Data.Sqlite;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -11,6 +12,7 @@ namespace ServidorPersistencia
 {
     internal class Estudiante
     {
+        public int Id { get; set; }
         public string Nombre { get; set; }
         public int Edad { get; set; }
         public string Carrera { get; set; }
@@ -18,18 +20,28 @@ namespace ServidorPersistencia
 
     internal class Program
     {
-        private static readonly string ArchivoJson = "estudiantes.json";
-        private static readonly List<Estudiante> Estudiantes = new List<Estudiante>();
+        private static readonly string CadenaConexion = "Data Source=estudiantes.db";
         private static readonly object Bloqueo = new object();
 
         static void Main(string[] args)
         {
-            CargarDatos();
+            SQLitePCL.Batteries_V2.Init();
+
+            try
+            {
+                InicializarBaseDatos();
+                MostrarEstudiantesGuardados();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("No se pudo inicializar SQLite. Verifica el paquete instalado.");
+                Console.WriteLine("Detalle: " + ex.Message);
+                return;
+            }
 
             TcpListener servidor = new TcpListener(IPAddress.Any, 8080);
             servidor.Start();
             Console.WriteLine("Servidor escuchando en el puerto 8080...");
-            Console.WriteLine("Estudiantes cargados: " + Estudiantes.Count);
 
             while (true)
             {
@@ -85,13 +97,19 @@ namespace ServidorPersistencia
             if (string.IsNullOrWhiteSpace(estudiante.Carrera))
                 return "ERROR: La carrera no puede estar vacía.";
 
-            lock (Bloqueo)
+            try
             {
-                Estudiantes.Add(estudiante);
-                GuardarDatos();
+                lock (Bloqueo)
+                {
+                    GuardarEstudiante(estudiante);
+                }
+            }
+            catch (Exception ex)
+            {
+                return "ERROR: No se pudo guardar en SQLite. " + ex.Message;
             }
 
-            Console.WriteLine(string.Format("Guardado -> Nombre: {0}, Edad: {1}, Carrera: {2}",
+            Console.WriteLine(string.Format("Guardado en SQLite -> Nombre: {0}, Edad: {1}, Carrera: {2}",
                 estudiante.Nombre, estudiante.Edad, estudiante.Carrera));
 
             return "OK: Estudiante guardado correctamente.";
@@ -123,63 +141,80 @@ namespace ServidorPersistencia
             return -1;
         }
 
-        static void GuardarDatos()
+        static void InicializarBaseDatos()
         {
-            StringBuilder sb = new StringBuilder();
-            sb.AppendLine("[");
-            for (int i = 0; i < Estudiantes.Count; i++)
+            using (SqliteConnection conexion = new SqliteConnection(CadenaConexion))
             {
-                Estudiante e = Estudiantes[i];
-                sb.Append("  {\"nombre\":\"").Append(EscaparJson(e.Nombre))
-                  .Append("\",\"edad\":").Append(e.Edad)
-                  .Append(",\"carrera\":\"").Append(EscaparJson(e.Carrera)).Append("\"}");
+                conexion.Open();
+                string sql = @"CREATE TABLE IF NOT EXISTS Estudiantes (
+                                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                Nombre TEXT NOT NULL,
+                                Edad INTEGER NOT NULL,
+                                Carrera TEXT NOT NULL
+                              );";
 
-                if (i < Estudiantes.Count - 1)
-                    sb.AppendLine(",");
-                else
-                    sb.AppendLine();
-            }
-            sb.Append("]");
-
-            File.WriteAllText(ArchivoJson, sb.ToString(), Encoding.UTF8);
-        }
-
-        static void CargarDatos()
-        {
-            if (!File.Exists(ArchivoJson))
-            {
-                Console.WriteLine("No se encontró archivo de datos. Iniciando con lista vacía.");
-                return;
-            }
-
-            try
-            {
-                string contenido = File.ReadAllText(ArchivoJson, Encoding.UTF8);
-                MatchCollection matches = Regex.Matches(contenido, "\\{[^}]+\\}");
-
-                foreach (Match match in matches)
+                using (SqliteCommand comando = new SqliteCommand(sql, conexion))
                 {
-                    try
-                    {
-                        Estudiante e = ParsearEstudiante(match.Value);
-                        Estudiantes.Add(e);
-                    }
-                    catch { }
+                    comando.ExecuteNonQuery();
                 }
-
-                Console.WriteLine("Datos cargados desde " + ArchivoJson + ". Total: " + Estudiantes.Count);
-                foreach (Estudiante e in Estudiantes)
-                    Console.WriteLine(string.Format("  - Nombre: {0}, Edad: {1}, Carrera: {2}", e.Nombre, e.Edad, e.Carrera));
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Error al cargar datos: " + ex.Message);
             }
         }
 
-        static string EscaparJson(string texto)
+        static void GuardarEstudiante(Estudiante estudiante)
         {
-            return texto.Replace("\\", "\\\\").Replace("\"", "\\\"");
+            using (SqliteConnection conexion = new SqliteConnection(CadenaConexion))
+            {
+                conexion.Open();
+                string sql = "INSERT INTO Estudiantes (Nombre, Edad, Carrera) VALUES (@nombre, @edad, @carrera);";
+
+                using (SqliteCommand comando = new SqliteCommand(sql, conexion))
+                {
+                    comando.Parameters.AddWithValue("@nombre", estudiante.Nombre);
+                    comando.Parameters.AddWithValue("@edad", estudiante.Edad);
+                    comando.Parameters.AddWithValue("@carrera", estudiante.Carrera);
+                    comando.ExecuteNonQuery();
+                }
+            }
+        }
+
+        static List<Estudiante> ObtenerEstudiantes()
+        {
+            List<Estudiante> estudiantes = new List<Estudiante>();
+
+            using (SqliteConnection conexion = new SqliteConnection(CadenaConexion))
+            {
+                conexion.Open();
+                string sql = "SELECT Id, Nombre, Edad, Carrera FROM Estudiantes;";
+
+                using (SqliteCommand comando = new SqliteCommand(sql, conexion))
+                using (SqliteDataReader reader = comando.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        estudiantes.Add(new Estudiante
+                        {
+                            Id = reader.GetInt32(0),
+                            Nombre = reader.GetString(1),
+                            Edad = reader.GetInt32(2),
+                            Carrera = reader.GetString(3)
+                        });
+                    }
+                }
+            }
+
+            return estudiantes;
+        }
+
+        static void MostrarEstudiantesGuardados()
+        {
+            List<Estudiante> estudiantes = ObtenerEstudiantes();
+
+            Console.WriteLine("Estudiantes cargados desde SQLite: " + estudiantes.Count);
+            foreach (Estudiante e in estudiantes.OrderBy(x => x.Id))
+            {
+                Console.WriteLine(string.Format("  - Id: {0}, Nombre: {1}, Edad: {2}, Carrera: {3}",
+                    e.Id, e.Nombre, e.Edad, e.Carrera));
+            }
         }
     }
 }

@@ -1,4 +1,4 @@
 <Solution>
-  <Project Path="Persistencia/ClientePersistencia.csproj" />
-  <Project Path="ServidorPersistencia/ServidorPersistencia.csproj" />
+  <Project Path="Persistencia/ClientePersistencia.csproj" Id="60bf1fc0-5566-442c-bef4-23cd50d2073f" />
+  <Project Path="ServidorPersistencia/ServidorPersistencia.csproj" Id="76ee5d10-856d-4bd4-a109-fbaf8a6fbeb1" />
 </Solution>
