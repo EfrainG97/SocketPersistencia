@@ -4,11 +4,13 @@ using System.Text;
 
 namespace Persistencia
 {
-    internal class Estudiante
+    internal class Usuario
     {
         public string Nombre { get; set; }
         public int Edad { get; set; }
-        public string Carrera { get; set; }
+        public string Correo { get; set; }
+        public string Ciudad { get; set; }
+        public string Telefono { get; set; }
     }
 
     internal class Program
@@ -31,7 +33,7 @@ namespace Persistencia
 
             do
             {
-                Console.WriteLine("\n--- Ingrese los datos del estudiante ---");
+                Console.WriteLine("\n--- Ingrese los datos del usuario ---");
 
                 Console.Write("Nombre: ");
                 string nombre = Console.ReadLine();
@@ -45,21 +47,31 @@ namespace Persistencia
                     Console.WriteLine("Edad inválida, ingrese un número entero.");
                 }
 
-                Console.Write("Carrera: ");
-                string carrera = Console.ReadLine();
+                Console.Write("Correo: ");
+                string correo = Console.ReadLine();
 
-                Estudiante estudiante = new Estudiante
+                Console.Write("Ciudad: ");
+                string ciudad = Console.ReadLine();
+
+                Console.Write("Teléfono: ");
+                string telefono = Console.ReadLine();
+
+                Usuario usuario = new Usuario
                 {
                     Nombre = nombre,
                     Edad = edad,
-                    Carrera = carrera
+                    Correo = correo,
+                    Ciudad = ciudad,
+                    Telefono = telefono
                 };
 
                 string json = string.Format(
-                    "{{\"nombre\":\"{0}\",\"edad\":{1},\"carrera\":\"{2}\"}}",
-                    estudiante.Nombre,
-                    estudiante.Edad,
-                    estudiante.Carrera
+                    "{{\"nombre\":\"{0}\",\"edad\":{1},\"correo\":\"{2}\",\"ciudad\":\"{3}\",\"telefono\":\"{4}\"}}",
+                    usuario.Nombre,
+                    usuario.Edad,
+                    usuario.Correo,
+                    usuario.Ciudad,
+                    usuario.Telefono
                 );
 
                 try
@@ -82,7 +94,7 @@ namespace Persistencia
                     Console.WriteLine("Error: " + ex.Message);
                 }
 
-                Console.Write("\n¿Desea enviar otro estudiante? (s/n): ");
+                Console.Write("\n¿Desea enviar otro usuario? (s/n): ");
                 continuar = Console.ReadLine();
 
             } while (continuar != null && continuar.Trim().ToLower() == "s");
